@@ -13,9 +13,19 @@ class CustomerPage(BaseTkPage):
         dashboard = DashboardPage()
         dashboard.open_customer_window()
         self._attach_window(self.window_title)
-        time.sleep(0.4)
+        # Wait until the 3 input fields and the Save button are detectable.
+        deadline = time.time() + 10
+        entry_controls = []
+        while time.time() < deadline:
+            entry_controls = self._entry_controls()
+            try:
+                save_button = self._button_by_text("Save Customer")
+                if len(entry_controls) >= 3 and save_button is not None:
+                    break
+            except Exception:
+                pass
+            time.sleep(0.2)
 
-        entry_controls = self._entry_controls()
         if len(entry_controls) < 3:
             raise RuntimeError("Customer input fields not found")
 
@@ -23,6 +33,11 @@ class CustomerPage(BaseTkPage):
         self.cin_field = entry_controls[1]
         self.email_field = entry_controls[2]
         self.save_button = self._button_by_text("Save Customer")
+
+
+        # No-op: messagebox handling is done by tests.
+
+
 
     def add_customer(self, name, cin, email):
         self._click_and_type(self.name_field, name)

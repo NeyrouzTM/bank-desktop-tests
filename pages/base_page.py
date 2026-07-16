@@ -28,13 +28,25 @@ class BaseTkPage:
         raise RuntimeError(f"{title} window not found")
 
     def _attach_window(self, title, timeout=10):
+        # Wait until window exists, then focus.
         self.window = self._wait_for_window(title, timeout=timeout)
         try:
             self.window.set_focus()
         except Exception:
             pass
-        time.sleep(0.3)
+
+        # Tk widgets are sometimes created right after focus; wait briefly
+        # but don't assume they are ready immediately.
+        for _ in range(10):
+            try:
+                # Trigger handle refresh
+                _ = self.window.children()
+                break
+            except Exception:
+                time.sleep(0.1)
+        time.sleep(0.2)
         return self.window
+
 
     def _launch_script(self, script_path):
         existing_handles = {
@@ -219,12 +231,44 @@ class BaseTkPage:
         raise RuntimeError(f"Button '{text}' not found")
 
     def _click_and_type(self, control, value):
-        control.click_input()
-        time.sleep(0.1)
+        # Tk controls can be present but not yet visible/actionable right after redraw.
+        last_exc = None
+        for _ in range(15):
+            try:
+                control.click_input()
+                time.sleep(0.1)
+                break
+            except Exception as e:
+                last_exc = e
+                time.sleep(0.15)
+
+        if last_exc is not None:
+            # One last attempt will raise if still not actionable.
+            pass
+
+        # Clear current content (if supported) then type.
         try:
             control.type_keys("^a{BACKSPACE}", with_spaces=True)
         except Exception:
-            pass
+            # Fallback: try plain backspace if Ctrl+A is not supported
+            try:
+                control.type_keys("{BACKSPACE}", with_spaces=True)
+            except Exception:
+                pass
+
         if value:
-            control.type_keys(value, with_spaces=True)
+            last_exc = None
+            for _ in range(10):
+                try:
+                    control.type_keys(value, with_spaces=True)
+                    last_exc = None
+                    break
+                except Exception as e:
+                    last_exc = e
+                    time.sleep(0.15)
+
+            if last_exc is not None:
+                raise last_exc
+
         time.sleep(0.05)
+

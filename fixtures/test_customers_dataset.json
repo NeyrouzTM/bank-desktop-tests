@@ -1,0 +1,15 @@
+[
+  {"name": "Amine Ben Salah", "cin": "91000001", "email": "amine.bensalah@example.com"},
+  {"name": "Sara Trabelsi", "cin": "91000002", "email": "sara.trabelsi@example.com"},
+  {"name": "Karim Mokhtar", "cin": "91000003", "email": "karim.mokhtar@example.com"},
+  {"name": "Nour El Amri", "cin": "91000004", "email": "nour.elamri@example.com"},
+  {"name": "Hedi Jarray", "cin": "91000005", "email": "hedi.jarray@example.com"},
+  {"name": "Salma Ksouri", "cin": "91000006", "email": "salma.ksouri@example.com"},
+  {"name": "Yassine Ayadi", "cin": "91000007", "email": "yassine.ayadi@example.com"},
+  {"name": "Ines Gharbi", "cin": "91000008", "email": "ines.gharbi@example.com"},
+  {"name": "Omar Cherif", "cin": "91000009", "email": "omar.cherif@example.com"},
+  {"name": "Mariam Ben Romdhane", "cin": "91000010", "email": "mariam.benromdhane@example.com"},
+  {"name": "Ibrahim Saadi", "cin": "91000011", "email": "ibrahim.saadi@example.com"},
+  {"name": "Lina Ben Ammar", "cin": "91000012", "email": "lina.benammar@example.com"}
+]
+

@@ -4,9 +4,14 @@ from datetime import datetime, timedelta
 import hashlib
 import random
 
-FILE_PATH = "data/customers.xlsx"
-TRANSFERS_PATH = "data/transfers.xlsx"
-ACTIVITY_PATH = "data/activity.xlsx"
+# IMPORTANT: use absolute paths to avoid writing to a wrong working directory.
+# This fixes cases where manual UI creation updates the wrong Excel file.
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.abspath(os.path.join(_BASE_DIR, os.pardir))
+
+FILE_PATH = os.environ.get("CUSTOMERS_DB_PATH", os.path.join(_REPO_ROOT, "data", "customers.xlsx"))
+TRANSFERS_PATH = os.path.join(_REPO_ROOT, "data", "transfers.xlsx")
+ACTIVITY_PATH = os.path.join(_REPO_ROOT, "data", "activity.xlsx")
 
 TRANSFER_HEADERS = [
     "Date",
@@ -109,11 +114,16 @@ def safe_load_activity():
 
 
 def add_customer(name, cin, email):
+    # Defensive normalization so this works even if called outside the UI.
+    name = (name or "").strip()
+    cin = (cin or "").strip()
+    email = (email or "").strip()
+
     wb = safe_load()
     ws = wb.active
 
     for row in ws.iter_rows(values_only=True):
-        if row[1] == cin:
+        if row and row[1] == cin:
             return False
 
     ws.append([name, cin, email])

@@ -1,6 +1,4 @@
-"""
-Live UI test session: one visible Bank Desktop App, tests drive that same window.
-"""
+
 
 from __future__ import annotations
 
@@ -15,7 +13,15 @@ import pytest
 from pywinauto import Desktop
 from pytest_html import extras as html_extras
 
+# Pendant les tests, l’app doit enregistrer les clients dans un fichier runtime séparé
+# (sinon reset_customer_database() détruit data/customers.xlsx qui sert de dataset).
+os.environ["CUSTOMERS_DB_PATH"] = str(
+    Path(__file__).resolve().parent / "data" / "test_customers_runtime.xlsx"
+)
+
 from helpers import reset_customer_database
+
+
 from pages.base_page import BaseTkPage
 from pages.customer_page import CustomerPage
 from pages.login_page import LoginPage
@@ -103,8 +109,13 @@ def _goto_login_screen():
 
 @pytest.fixture(autouse=True)
 def clean_customer_database():
+    # Réinitialise le fichier de données utilisé par l'application.
+    # Les tests doivent ensuite écrire leurs clients dans ce même fichier Excel.
     reset_customer_database()
     yield
+
+
+
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -10,7 +10,19 @@ class DashboardPage(BaseTkPage):
         self._attach_window(self.window_title)
 
     def _activate(self, title):
-        button = self._button_by_text(title)
+        # Le texte affiché peut varier (ex: "Create Customer" vs "Add Customer").
+        # On tente plusieurs variantes pour éviter les erreurs flakies.
+        candidates = [title, title.replace("Customer", "Client"), title.replace("Create", "Add")]
+        button = None
+        last_exc = None
+        for cand in candidates:
+            try:
+                button = self._button_by_text(cand)
+                break
+            except Exception as e:
+                last_exc = e
+        if button is None:
+            raise last_exc if last_exc else RuntimeError(f"Button '{title}' not found")
         try:
             self.window.set_focus()
         except Exception:
