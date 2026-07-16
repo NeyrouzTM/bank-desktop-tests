@@ -1,5 +1,4 @@
 
-
 from __future__ import annotations
 
 import base64
@@ -177,15 +176,45 @@ def transfer_page(logged_in_dashboard):
     yield page
 
 
-@pytest.hookimpl(tryfirst=True, hookwrapper=True)
-def pytest_runtest_makereport(item, call):
-    outcome = yield
-    report = outcome.get_result()
+def _extract_best_effort_cin(item, report):
+    """Try to infer CIN used by the test.
 
-    if report.when != "call" or not report.failed:
+    pytest does not provide access to local variables inside the test function,
+    so this is best-effort.
+    """
+    # 1) Try from test name (nodeid often contains params indirectly only if test id includes them)
+    nodeid = (getattr(item, "nodeid", "") or "").lower()
+    # Heuristic: find an 8-digit or 7-9 digit sequence in nodeid/log
+    import re
+
+    m = re.search(r"\b\d{7,10}\b", nodeid)
+    if m:
+        return m.group(0)
+
+    # 2) Try from the failure message/log if available
+    longrepr = getattr(report, "longreprtext", "") or ""
+    m2 = re.search(r"\b\d{7,10}\b", longrepr)
+    if m2:
+        return m2.group(0)
+
+    return None
+
+
+def _add_text_extra(report, html_text, name="Meta"):
+    """Add custom html/text to pytest-html report."""
+    try:
+        report.extras = getattr(report, "extras", [])
+        report.extras.append(
+            html_extras.html(f"<div><b>{name}</b>: {html_text}</div>")
+        )
+    except Exception:
+        # Never break the test/report because of report formatting
         return
 
-    page = next(
+
+
+def _attach_screenshot_if_possible(item, report, page_candidates=None):
+    page = page_candidates or next(
         (value for value in item.funcargs.values() if hasattr(value, "window")),
         None,
     )
@@ -199,7 +228,7 @@ def pytest_runtest_makereport(item, call):
     try:
         page.window.capture_as_image().save(screenshot_path)
     except Exception:
-        pass
+        return
 
     try:
         screenshot_base64 = base64.b64encode(screenshot_path.read_bytes()).decode("utf-8")
@@ -211,4 +240,20 @@ def pytest_runtest_makereport(item, call):
             )
         )
     except Exception:
-        pass
+        return
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+
+    # Always add CIN for both passed & failed when we have a report object.
+    cin = _extract_best_effort_cin(item, report)
+    cin_value = cin if cin is not None else "N/A"
+    _add_text_extra(report, cin_value, name="CIN")
+
+    # Attach screenshot for any failure phase (setup/call/teardown).
+    if report.failed and report.when in {"setup", "call", "teardown"}:
+        _attach_screenshot_if_possible(item, report)
+
