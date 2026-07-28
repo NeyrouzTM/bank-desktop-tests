@@ -23,6 +23,7 @@ from helpers import reset_customer_database
 
 from pages.base_page import BaseTkPage
 from pages.customer_page import CustomerPage
+from pages.insurance_page import InsurancePage
 from pages.login_page import LoginPage
 from pages.search_page import SearchPage
 from pages.transfer_page import TransferPage
@@ -173,6 +174,12 @@ def search_page(logged_in_dashboard):
 @pytest.fixture
 def transfer_page(logged_in_dashboard):
     page = TransferPage()
+    yield page
+
+
+@pytest.fixture
+def insurance_page(logged_in_dashboard):
+    page = InsurancePage()
     yield page
 
 

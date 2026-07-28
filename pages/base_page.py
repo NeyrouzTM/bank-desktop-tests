@@ -231,44 +231,49 @@ class BaseTkPage:
         raise RuntimeError(f"Button '{text}' not found")
 
     def _click_and_type(self, control, value):
-        # Tk controls can be present but not yet visible/actionable right after redraw.
+        """Robust click + type for Tk widgets.
+
+        Tk widgets may become temporarily invisible / not-actionable right after
+        redraw/focus, and pywinauto wrappers can become stale.
+
+        This method retries until the target control becomes visible enough
+        for typing.
+        """
         last_exc = None
-        for _ in range(15):
+
+        for _ in range(30):
             try:
+                # verify visible/actionable if possible
+                try:
+                    if hasattr(control, "is_visible") and not control.is_visible():
+                        raise Exception("ElementNotVisible")
+                except Exception:
+                    # Re-raise to trigger retry
+                    raise
+
                 control.click_input()
-                time.sleep(0.1)
-                break
+                time.sleep(0.08)
+
+                # Clear current content then type.
+                try:
+                    control.type_keys("{BACKSPACE}", with_spaces=True)
+                except Exception:
+                    try:
+                        control.type_keys("{BACKSPACE}", with_spaces=True)
+                    except Exception:
+                        pass
+
+                if value:
+                    control.type_keys(value, with_spaces=True)
+
+                time.sleep(0.05)
+                return
+
             except Exception as e:
                 last_exc = e
                 time.sleep(0.15)
 
         if last_exc is not None:
-            # One last attempt will raise if still not actionable.
-            pass
+            raise last_exc
 
-        # Clear current content (if supported) then type.
-        try:
-            control.type_keys("^a{BACKSPACE}", with_spaces=True)
-        except Exception:
-            # Fallback: try plain backspace if Ctrl+A is not supported
-            try:
-                control.type_keys("{BACKSPACE}", with_spaces=True)
-            except Exception:
-                pass
-
-        if value:
-            last_exc = None
-            for _ in range(10):
-                try:
-                    control.type_keys(value, with_spaces=True)
-                    last_exc = None
-                    break
-                except Exception as e:
-                    last_exc = e
-                    time.sleep(0.15)
-
-            if last_exc is not None:
-                raise last_exc
-
-        time.sleep(0.05)
 

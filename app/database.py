@@ -341,5 +341,99 @@ def _seed_transfers():
         )
 
 
+# ──────────────────────────────────────────────
+# Insurance database
+# ──────────────────────────────────────────────
+INSURANCE_PATH = os.path.join(_REPO_ROOT, "data", "insurance.xlsx")
+
+INSURANCE_HEADERS = [
+    "Date",
+    "CIN",
+    "CustomerName",
+    "InsuranceType",
+    "Pack",
+    "Price",
+    "BalanceBefore",
+    "BalanceAfter",
+    "Status",
+]
+
+def init_insurance_db():
+    if not os.path.exists("data"):
+        os.makedirs("data")
+
+    if not os.path.exists(INSURANCE_PATH):
+        wb = Workbook()
+        ws = wb.active
+        ws.append(INSURANCE_HEADERS)
+        wb.save(INSURANCE_PATH)
+
+
+def add_insurance_subscription(
+    cin: str,
+    customer_name: str,
+    insurance_type: str,
+    pack: str,
+    price: float,
+    balance_before: float,
+    balance_after: float,
+    status: str = "Success",
+):
+    """Enregistre une souscription d'assurance dans insurance.xlsx."""
+    init_insurance_db()
+    wb = load_workbook(INSURANCE_PATH)
+    ws = wb.active
+
+    when = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ws.append([
+        when,
+        cin,
+        customer_name,
+        insurance_type,
+        pack,
+        float(price),
+        float(balance_before),
+        float(balance_after),
+        status,
+    ])
+    wb.save(INSURANCE_PATH)
+
+    region = _pick_region(cin)
+    log_activity(
+        event_type="InsuranceSubscription",
+        reference=f"{insurance_type}/{pack}",
+        from_cin=cin,
+        to_cin=cin,
+        amount=price,
+        status=status,
+        region=region,
+        channel="Desktop App",
+        detail=f"Insurance {insurance_type} - {pack} ({price}€) for {customer_name}",
+    )
+
+
+def list_insurance_subscriptions() -> list[dict]:
+    """Liste toutes les souscriptions d'assurance."""
+    init_insurance_db()
+    wb = load_workbook(INSURANCE_PATH)
+    ws = wb.active
+    rows = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row or not row[0]:
+            continue
+        rows.append({
+            "date": str(row[0] or ""),
+            "cin": str(row[1] or ""),
+            "customer_name": str(row[2] or ""),
+            "insurance_type": str(row[3] or ""),
+            "pack": str(row[4] or ""),
+            "price": float(row[5] or 0),
+            "balance_before": float(row[6] or 0),
+            "balance_after": float(row[7] or 0),
+            "status": str(row[8] or "Success"),
+        })
+    return rows
+
+
 # Ensure storage exists when the module is imported by the app.
 init_db()

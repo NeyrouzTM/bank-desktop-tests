@@ -8,7 +8,7 @@ from tkinter import messagebox
 
 from openpyxl import load_workbook
 
-from database import FILE_PATH, add_customer, add_transfer, customer_count, list_transfers
+from database import FILE_PATH, add_customer, add_insurance_subscription, add_transfer, customer_count, list_insurance_subscriptions, list_transfers
 from theme import DARK, LIGHT, FONT_BODY, FONT_BUTTON, FONT_SMALL, FONT_SUBTITLE, FONT_TITLE
 from widgets import (
     expose_win_text,
@@ -29,6 +29,7 @@ NAV_ITEMS = [
     ("Create Customer", "customers"),
     ("Search Customer", "search"),
     ("Transfer Money", "transfer"),
+    ("Insurance", "insurance"),
     ("Power BI Dashboard", "bi"),
 ]
 
@@ -314,6 +315,10 @@ class BankApp:
             "_form_to",
             "_form_amount",
             "_form_search_cin",
+            "_form_insurance_cin",
+            "_form_insurance_balance",
+            "_insurance_search_btn",
+            "_insurance_pay_btn",
         ):
             widget = getattr(self, attr, None)
             if widget is None:
@@ -359,6 +364,7 @@ class BankApp:
             "customers": "Create Customer",
             "search": "Search Customer",
             "transfer": "Transfer Money",
+            "insurance": "Insurance",
             "bi": "Power BI Dashboard",
         }
         self.current_view = key
@@ -374,6 +380,7 @@ class BankApp:
             "customers": self._view_customers,
             "search": self._view_search,
             "transfer": self._view_transfer,
+            "insurance": self._view_insurance,
             "bi": self._view_bi,
         }
         builders[key]()
@@ -708,6 +715,243 @@ class BankApp:
                 pass
 
         self.root.after(40, place_form)
+
+    def _view_insurance(self):
+        t = self.t
+
+        # Pack catalog
+        packs = {
+            "hospital": [("Pack 1 - Hospitalisation de base", 200), ("Pack 2 - Hospitalisation confort", 500), ("Pack 3 - Hospitalisation premium", 800)],
+            "ambulatoire": [("Pack 1 - Soins de base", 100), ("Pack 2 - Soins intermédiaires", 300), ("Pack 3 - Soins complets", 600)],
+        }
+
+        panel = glass_card(self.content, t)
+        panel.master.master.pack(fill="both", expand=True)
+
+        styled_label(panel, t, "Insurance", font=FONT_TITLE).pack(anchor="w")
+        styled_label(
+            panel, t, "Souscrivez à une assurance et choisissez votre pack", font=FONT_SUBTITLE, fg=t["muted"]
+        ).pack(anchor="w", pady=(2, 16))
+
+        # --- Customer selection ---
+        customer_frame = tk.Frame(panel, bg=t["card"])
+        customer_frame.pack(anchor="w", fill="x")
+
+        styled_label(customer_frame, t, "Rechercher un client (CIN)", font=FONT_SMALL, fg=t["muted"]).pack(anchor="w")
+        cin_slot = tk.Frame(customer_frame, bg=t["card"], width=200, height=28)
+        cin_slot.pack(side="left", pady=(6, 12))
+        cin_slot.pack_propagate(False)
+
+        search_btn_slot = tk.Frame(customer_frame, bg=t["card"], width=100, height=28)
+        search_btn_slot.pack(side="left", padx=(10, 0), pady=(6, 12))
+        search_btn_slot.pack_propagate(False)
+
+        self.customer_info_label = styled_label(panel, t, "", font=FONT_BODY, fg=t["green"])
+        self.customer_info_label.pack(anchor="w", pady=(0, 8))
+
+        # --- Balance ---
+        balance_frame = tk.Frame(panel, bg=t["card"])
+        balance_frame.pack(anchor="w", fill="x")
+
+        styled_label(balance_frame, t, "Solde du compte (€)", font=FONT_SMALL, fg=t["muted"]).pack(anchor="w")
+        balance_slot = tk.Frame(balance_frame, bg=t["card"], width=200, height=28)
+        balance_slot.pack(anchor="w", pady=(6, 12))
+        balance_slot.pack_propagate(False)
+
+        # --- Insurance type ---
+        type_frame = tk.Frame(panel, bg=t["card"])
+        type_frame.pack(anchor="w", fill="x")
+
+        styled_label(type_frame, t, "Type d'assurance", font=FONT_SMALL, fg=t["muted"]).pack(anchor="w")
+
+        insurance_type_var = tk.StringVar(value="hospital")
+        rb_hospital = tk.Radiobutton(type_frame, text="Assurance hospitalière", variable=insurance_type_var, value="hospital")
+        rb_ambulatoire = tk.Radiobutton(type_frame, text="Assurance ambulatoire", variable=insurance_type_var, value="ambulatoire")
+
+        # Store radio references for potential cleanup later
+        self._insurance_radios = [rb_hospital, rb_ambulatoire]
+
+        for rb in (rb_hospital, rb_ambulatoire):
+            rb.configure(
+                bg=t["card"], fg=t["text"], selectcolor=t["bg"],
+                activebackground=t["card"], activeforeground=t["text"],
+                font=FONT_BODY, cursor="hand2",
+            )
+            rb.pack(anchor="w", pady=2)
+
+        # --- Pack selection ---
+        pack_frame = tk.Frame(panel, bg=t["card"])
+        pack_frame.pack(anchor="w", fill="x", pady=(12, 0))
+
+        styled_label(pack_frame, t, "Choisir un pack", font=FONT_SMALL, fg=t["muted"]).pack(anchor="w")
+
+        pack_listbox = tk.Listbox(pack_frame, height=6, font=FONT_BODY)
+        pack_listbox.pack(anchor="w", pady=6, fill="x")
+
+        def refresh_packs(*_args):
+            pack_listbox.delete(0, tk.END)
+            chosen = packs.get(insurance_type_var.get(), packs["hospital"])
+            for pk_name, pk_price in chosen:
+                pack_listbox.insert(tk.END, f"{pk_name} - {pk_price}€")
+            try:
+                pack_listbox.selection_set(0)
+            except Exception:
+                pass
+
+        insurance_type_var.trace_add("write", refresh_packs)
+        refresh_packs()
+
+        # --- Price display ---
+        self.price_label = styled_label(panel, t, "Prix: 200€", font=("Segoe UI Semibold", 14), fg=t["cyan"])
+        self.price_label.pack(anchor="w", pady=(10, 0))
+
+        def update_price(*_args):
+            try:
+                sel = pack_listbox.curselection()
+                if not sel:
+                    return
+                text = pack_listbox.get(sel[0])
+                # Extract price from text like "Pack 1 - Hospitalisation de base - 200€"
+                import re
+                m = re.search(r"(\d+)€", text)
+                if m:
+                    self.price_label.configure(text=f"Prix: {m.group(1)}€")
+            except Exception:
+                pass
+
+        pack_listbox.bind("<<ListboxSelect>>", update_price)
+
+        # --- Pay button ---
+        pay_btn_slot = tk.Frame(panel, bg=t["card"], width=160, height=36)
+        pay_btn_slot.pack(anchor="w", pady=(16, 0))
+        pay_btn_slot.pack_propagate(False)
+
+        # --- Insurance history ---
+        history_label = styled_label(panel, t, "", font=FONT_SMALL, fg=t["muted"])
+        history_label.pack(anchor="w", pady=(10, 0))
+
+        # Store the selected customer info
+        self._selected_customer_cin = None
+        self._selected_customer_name = None
+
+        def search_customer():
+            cin = self._form_insurance_cin.get().strip()
+            if not cin:
+                messagebox.showerror("Error", "CIN requis")
+                return
+            if not cin.isdigit() or len(cin) != 8:
+                messagebox.showerror("Error", "CIN invalide (8 chiffres)")
+                return
+
+            wb = load_workbook(FILE_PATH)
+            ws = wb.active
+            for row in ws.iter_rows(values_only=True):
+                if row[1] == cin:
+                    self._selected_customer_cin = str(row[1])
+                    self._selected_customer_name = str(row[0])
+                    self.customer_info_label.configure(
+                        text=f"Client: {row[0]} | CIN: {row[1]}",
+                        fg=t["green"],
+                    )
+                    return
+            self._selected_customer_cin = None
+            self._selected_customer_name = None
+            self.customer_info_label.configure(text="Client non trouvé", fg=t["danger"])
+
+        def payer():
+            if not self._selected_customer_cin:
+                messagebox.showerror("Error", "Veuillez d'abord rechercher un client")
+                return
+
+            try:
+                balance = float(self._form_insurance_balance.get().strip().replace(",", "."))
+                if balance < 0:
+                    messagebox.showerror("Error", "Le solde ne peut pas être négatif")
+                    return
+            except ValueError:
+                messagebox.showerror("Error", "Montant du solde invalide")
+                return
+
+            # Determine selected pack and price
+            insurance_type = insurance_type_var.get()
+            sel = pack_listbox.curselection()
+            if not sel:
+                messagebox.showerror("Error", "Veuillez sélectionner un pack")
+                return
+
+            text = pack_listbox.get(sel[0])
+            import re
+            m = re.search(r"(Pack \d+).*?(\d+)€", text)
+            if not m:
+                messagebox.showerror("Error", "Erreur de lecture du pack")
+                return
+
+            pack_name = m.group(1)
+            price = int(m.group(2))
+
+            if balance < price:
+                messagebox.showerror(
+                    "Error",
+                    f"Solde insuffisant. Vous avez {balance}€ mais le pack coûte {price}€.\n"
+                    "Merci de recharger votre compte.",
+                )
+                return
+
+            # Process payment
+            new_balance = balance - price
+            insurance_label = "Hospitalière" if insurance_type == "hospital" else "Ambulatoire"
+
+            # Save to insurance database
+            add_insurance_subscription(
+                cin=self._selected_customer_cin,
+                customer_name=self._selected_customer_name,
+                insurance_type=insurance_label,
+                pack=pack_name,
+                price=float(price),
+                balance_before=balance,
+                balance_after=new_balance,
+            )
+
+            # Update balance field
+            self._form_insurance_balance.delete(0, tk.END)
+            self._form_insurance_balance.insert(0, str(new_balance))
+
+            messagebox.showinfo(
+                "Success",
+                f"Paiement effectué avec succès!\n"
+                f"Assurance: {insurance_label}\n"
+                f"Pack: {pack_name}\n"
+                f"Montant débité: {price}€\n"
+                f"Nouveau solde: {new_balance}€",
+            )
+
+            # Show subscription count
+            subs = list_insurance_subscriptions()
+            count = sum(1 for s in subs if s["cin"] == self._selected_customer_cin)
+            history_label.configure(
+                text=f"Ce client a {count} souscription(s) d'assurance",
+                fg=t["muted"],
+            )
+
+        # Direct-on-root controls for automation
+        self._form_insurance_cin = styled_entry(self.root, t)
+        self._form_insurance_balance = styled_entry(self.root, t)
+        self._insurance_search_btn = primary_button(self.root, t, "Search", search_customer, width=12)
+        self._insurance_pay_btn = primary_button(self.root, t, "Payer", payer, width=16)
+        self.form_entries = [self._form_insurance_cin, self._form_insurance_balance]
+
+        def place_insurance_form(_e=None):
+            try:
+                self._place_on_slot(self._form_insurance_cin, cin_slot)
+                self._place_on_slot(self._insurance_search_btn, search_btn_slot)
+                self._place_on_slot(self._form_insurance_balance, balance_slot)
+                self._place_on_slot(self._insurance_pay_btn, pay_btn_slot)
+                for btn in self.nav_buttons.values():
+                    btn.lift()
+            except tk.TclError:
+                pass
+
+        self.root.after(40, place_insurance_form)
 
     def _view_bi(self):
         t = self.t
